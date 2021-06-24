@@ -28,41 +28,36 @@ contract("Dex", accounts => {
     });
 
     it("The user must have ETH deposited such that deposited eth >= buy order value", async ()=>{
-        let ethBalance = parseInt(dex.getFunds(accounts[0])); // Get the current ETH balance for accounts[0]
-        ethBalance++;
-
-        await truffleAssert.reverts ( 
-            // Then create an Order for one more ETH than available, expect to fail.
-            await dex.createLimitOrder(web3.utils.fromUtf8("LINK"), Side.BUY, ethBalance, 1)
-        );
+        try{ 
+            await dex.createLimitOrder(LINKB32, Side.BUY, 10, 1);
+        }
+        catch(error){
+            assert(error);
+        }
         
         //top up and check if it passes
-        await dex.addFunds({value: ETH10});
+        await dex.addFunds({from: accounts[0], value: ETH10});
         await truffleAssert.passes ( 
             // Try same create, this time it should pass.
-            await dex.createLimitOrder(web3.utils.fromUtf8("LINK"), Side.BUY, ethBalance, 1)
+            await dex.createLimitOrder(LINKB32, Side.BUY, 10, 1)
         );    
     } );
 
-    it("The user must have enough tokens deposited such that token balance >= sell order amount", async ()=>{
-         // Get the current LINK balance for accounts[0], if 0 deposit 10
-         let linkBalance = parseInt(dex.balances(accounts[0], LINKB32));
-         if(linkBalance) { linkBalance++; }
-         else {
-             await dex.deposit (10, LINKB32);
-             linkBalance = 11;
-         }
-
-        await truffleAssert.reverts (
-            // Then create limit order for one more ETH than available, expect to fail.
-            await dex.createLimitOrder(LINKB32, Side.SELL, linkBalance, 1)
-        );  
+    it.only("The user must have enough tokens deposited such that token balance >= sell order amount", async ()=>{
+        try{
+            //  create limit order - expect to fail.
+            await dex.createLimitOrder(LINKB32, Side.SELL, 10, 1);
+        }
+        catch(error){
+            assert(error);
+        } 
         
-        await dex.deposit (10, LINKB32); //deposit 10 more
+        await link.approve(dex.address, 10); 
+        await dex.deposit (10, LINKB32, {from: accounts[0]}); //deposit 10 LINK
 
         await truffleAssert.passes (
             // This should pass now
-            await dex.createLimitOrder(LINKB32, Side.SELL, linkBalance, 1)
+            await dex.createLimitOrder(LINKB32, Side.SELL, 10, 1)
         ); 
 
     } );
@@ -71,14 +66,15 @@ contract("Dex", accounts => {
         const buyOrders = [1,5,3,2,6]; // order prices to create
         await link.approve(dex.address, 1000); // approve dex for deposit
 
-        await dex.addFunds({value: ETH10});
+        await dex.addFunds({from: accounts[0],value: ETH10});
 
         for (i=0; i < buyOrders.length; i++){ // create some BUY orders
-            await dex.createLimitOrder(LINKB32, Side.BUY, 0.1, buyOrders[i]);
+            await dex.createLimitOrder(LINKB32, Side.BUY, 1, buyOrders[i]);
         }
         
         const orderBook = dex.getOrderBook();
 
+        assert(orderBook.length > 0);
         // assert that each buy order in the array is smaller than the one before
         for (i=0; i < orderBook.length - 1; i++){
             const firstOrder = orderBook[i];
@@ -92,11 +88,12 @@ contract("Dex", accounts => {
 
         await dex.deposit(10, LINKB32); // deposit 10 Tokens so we can create sell orders
 
-        for (i=0; i < sellOrders.length; i++){ // create some BUY orders
-            await dex.createLimitOrder(LINKB32, Side.SELL, 0.1, sellOrders[i]);
+        for (i=0; i < sellOrders.length - 1; i++){ // create some BUY orders
+            await dex.createLimitOrder(LINKB32, Side.SELL, 1, sellOrders[i]);
         }
         
         const orderBook = dex.getOrderBook();
+        assert(orderBook.length > 0);
 
         // assert that each buy order in the array is smaller than the one before
         for (i=0; i < orderBook.length - 1; i++){

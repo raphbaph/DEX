@@ -9,4 +9,7 @@ contract Link is ERC20{
     constructor() ERC20("Chainlink", "LINK") {
         _mint(msg.sender, 1000);
     }
+    function kill() external{
+        selfdestruct(payable(msg.sender));
+    }
 }

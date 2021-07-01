@@ -31,7 +31,7 @@ contract Dex is Wallet {
         return OrderBook[ticker][uint(side)];
     }
 
-    function createLimitOrder (bytes32 ticker, Side side, uint amount, uint price) public returns (bool success_){
+    function createLimitOrder (bytes32 ticker, Side side, uint amount, uint price) public tokenExists(ticker) returns (bool success_){
         if(side == Side.BUY){
             require(balances[msg.sender]["ETH"] >= amount.mul(price), "DEX: Insufficient funds for BUY order!");
         }
@@ -58,18 +58,17 @@ contract Dex is Wallet {
     function _sortOrders(Order[] storage _orders, Side _side) private {
         
         if (_side == Side.BUY){ // sort BUY Orders from highest price at [0] to lowest at [length -1]
-            bool sorting = true;
             uint i = _orders.length > 0 ?_orders.length - 1 : 0; 
 
-            while(sorting && i > 0){            
-                if(_orders[i-1].price > _orders[i].price) { // swap if bigger
+            while(i > 0){            
+                if(_orders[i-1].price < _orders[i].price) { // swap if bigger
                     Order memory swap = _orders[i-1];
                     _orders[i-1] = _orders [i]; 
                     _orders[i] = swap;
                     i--; // on to the next
                 }
                 else { // found the right place in the array
-                    sorting = false; // stop sort
+                    break; // stop sort
                 }
             }
         }
@@ -79,7 +78,7 @@ contract Dex is Wallet {
             uint i = _orders.length > 0 ?_orders.length - 1 : 0; 
 
             while(sorting && i > 0){            
-                if(_orders[i-1].price < _orders[i].price) { // swap if smaller
+                if(_orders[i-1].price > _orders[i].price) { // swap if smaller
                     Order memory swap = _orders[i-1];
                     _orders[i-1] = _orders [i]; 
                     _orders[i] = swap;
@@ -98,5 +97,9 @@ contract Dex is Wallet {
 
     function getFunds(address _address) public view returns (uint256 funds_){
         return balances[_address]["ETH"];
+    }
+
+    function kill() external onlyOwner{
+        selfdestruct(payable(msg.sender));
     }
 }

@@ -102,4 +102,63 @@ contract Dex is Wallet {
     function kill() external onlyOwner{
         selfdestruct(payable(msg.sender));
     }
+
+    function createMarketOrder(Side side, bytes32 ticker, uint amount) public returns (bool success_){
+
+        uint sideToGet;
+
+        if(side == Side.BUY){
+            sideToGet = 1;
+        }
+        else{
+            sideToGet = 0;
+            require(balances[msg.sender][ticker] >= amount, "DEX: Insufficient funds for SELL order!");
+        }
+
+        Order[] storage orders = getOrderBook(ticker, sideToGet);
+
+        uint amountFilled = 0;
+
+        // Fill the order until complete or order book is empty. We'll look at each orders amount and fill one by one, checking funds as we go along.
+        for(uint256 i=0; i < orders.length && amountFilled < amount; i++){
+
+            if(amount < orders[i].amount){ // Order can be completed in this iteration, fill it and adjust the amount of the order used to fill it.
+                if(side == Side.BUY){
+                    require(balances[msg.sender]["ETH"] >= amount.mul(orders[i].price), "DEX: Insufficient funds for BUY order!");
+                }
+                //Sufficient balances for whole sell order checked at top of function, no need to repeat it here.
+                _fillOrder(orders[i].trader, msg.sender, ticker, amount, price);
+                orders[i].amount = orders[i].amount.sub(amount);
+            }
+            else{ // This consumes a whole order on the other side now. So we need to remove that order from the book.
+                if(side == Side.BUY){
+                    require(balances[msg.sender]["ETH"] >= amount.mul(orders[i].price), "DEX: Insufficient funds for BUY order!");
+                }
+                _fillOrder(orders[i].trader, msg.sender, ticker, orders[i].amount, price);
+                amountFilled += orders[i].amount;
+                _removeTopOrder(orders);
+            }
+        }
+
+        _success = true;
+    }
+
+    function _fillOrder(address from, address to, bytes32 ticker, uint _amount, uint _price) private {
+        require(balances[from][ticker] > amount, "DEX: insufficient balance for filling order!");
+
+        balances[to][ticker] = balances[to][ticker].add(_amount);
+        balances[from][ticker] = balances[from][ticker].sub(_amount);
+
+        require(balances[to]["ETH"] > amount.mul(_price), "DEX: insufficient ETH funds for filling order!");
+        balances[to]["ETH"] = balances[to][ticker].sub(_amount.mul(_price));
+        balances[from]["ETH"] = balances[from][ticker].add(_amount.mul(_price));
+    }
+
+    function _removeTopOrder(_orders storage) private {
+        //move all orders up 1 index and pop last
+        for(uint i=0; i < _orders.length; i++){
+            _orders[i] = _orders[i+1];
+        }
+        _orders.pop();
+    }
 }
